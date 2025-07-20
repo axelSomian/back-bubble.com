@@ -21,7 +21,9 @@ app.use((req, res, next) => {
   next();
 
 });
-
+app.get('/', (req, res) => {
+  res.send('API Bubble opérationnelle 🎉');
+});
 app.use('/api/houses', houseRoutes);
 app.use('/api/users',userRoutes); // Assurez-vous que le fichier user.route.js existe
 app.use('/api/owners', ownerRoutes); // Assurez-vous que le fichier owner.route.js existe
