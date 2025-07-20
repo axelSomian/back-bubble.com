@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express= require('express');
 const mongoose= require('mongoose');
 const houseRoutes= require('./routes/house.route'); 
@@ -5,7 +6,7 @@ const userRoutes= require('./routes/user.route'); // Assurez-vous que le fichier
 const ownerRoutes= require('./routes/owner.route'); // Assurez-vous que le fichier owner.route.js existe
 
 //connexion a la bd mongoDB
-const mongoURI = 'mongodb+srv://asomian:1234567890@cluster0.oywzmmd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'; // remplace par ton URI
+const mongoURI = process.env.MONGO_URI    ; // remplace par ton URI
 mongoose.connect(mongoURI, {})
 .then(() => console.log('✅ Connexion à MongoDB réussie'))
 .catch(err => console.error('❌ Erreur de connexion MongoDB :', err));

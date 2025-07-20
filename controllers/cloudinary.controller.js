@@ -1,10 +1,12 @@
+require('dotenv').config();
 const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 
 cloudinary.config({
-    cloud_name: 'dcxlhvonw',
-    api_key: '638599752543621',
-    api_secret: 's8W4HUN_XZbAEwsn1bsNWeQ6hF8'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME ,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+
 });
 
 exports.uploadImage = async (file) => {
