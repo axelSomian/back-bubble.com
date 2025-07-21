@@ -72,24 +72,29 @@ exports.getHouseById = async (req, res) => {
 // Recherche par ville ou quartier
 exports.searchHouses = async (req, res) => {
     try {
-        const { city, neighboorhood } = req.query;
-        const value = city || neighboorhood;
+        const { value } = req.query;
 
         if (!value) {
             return res.status(400).json({ error: 'City or neighborhood required' });
         }
 
-        const regex = new RegExp(value, 'i');
-        const query = {
-            $or: [
-                { city: { $regex: regex } },
-                { neighboorhood: { $regex: regex } }
-            ]
-        };
+        const regex = new RegExp(value, 'i'); // Recherche partielle insensible à la casse
+        const houses = await House.find({ neighboorhood: { $regex: regex }  });
+        // Si on ne trouve pas de maisons, on cherche par ville
+        if (houses.length === 0) {
+            const cityHouses = await House.find({ city: { $regex: regex } });
+            if (cityHouses.length > 0) {
+                return res.status(200).json(cityHouses);
+            }
+        }
 
-        const houses = await House.find(query);
+        if (houses.length === 0) {
+            return res.status(404).json({ message: 'No houses found' });
+        }
+
         res.status(200).json(houses);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 };
+
