@@ -24,6 +24,9 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.send('API Bubble opérationnelle 🎉');
 });
+app.get('*', function(req, res) {
+  res.sendFile(path.join(__dirname, '/dist/ton-app/index.html'));
+});
 app.use('/api/houses', houseRoutes);
 app.use('/api/users',userRoutes); // Assurez-vous que le fichier user.route.js existe
 app.use('/api/owners', ownerRoutes); // Assurez-vous que le fichier owner.route.js existe
