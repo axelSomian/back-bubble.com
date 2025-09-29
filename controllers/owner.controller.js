@@ -3,6 +3,7 @@ const cloudinaryController = require('./cloudinary.controller');
 
 
 exports.createOwner = async (req, res) => {
+    console.log("Received files:", req.files); // Debugging line
 try {
     const files = req.files;
     if (!files || files.length === 0) {

@@ -1,5 +1,6 @@
 const House = require("../models/house.model");
 const cloudinaryController = require('./cloudinary.controller');
+const paginate = require('../helpers/paginate');
 const fs = require("fs");
 
 // Créer un logement avec upload d'images
@@ -19,7 +20,7 @@ exports.createHouse = async (req, res) => {
                 if (fs.existsSync(file.path)) {
                     fs.unlinkSync(file.path);
                 }
-                return result.url;
+                return result.medium;
             })
         );
 
@@ -47,15 +48,13 @@ exports.createHouse = async (req, res) => {
 };
 
 // Récupérer toutes les maisons
-exports.getHouses = async (req, res) => {
-    try {
-        const houses = await House.find();
-        res.status(200).json(houses);
-        console.log(`toutes les houses: ${houses}`) 
-    } catch (err) {
+exports.getHouses = async (req, res) => { 
+    try { 
+         const resultat = await paginate(House, {}, req.query); 
+        res.status(200).json(resultat); 
+    } catch (err) { 
         res.status(500).json({ error: err.message });
-    }
-};
+     } };
 
 // Récupérer une maison par ID
 exports.getHouseById = async (req, res) => {
@@ -75,11 +74,14 @@ const escapeRegex = s => s ? s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : s;
 
 exports.searchHouses = async (req, res) => {
   try {
-    const { place, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
+   // console.log("Search request received with query:", req.query);
+    const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
+  //  console.log(value)
     const query = {};
 
-    if (place) {
-      const regex = new RegExp(escapeRegex(place), 'i');
+    //console.log(`Search parameters: place=${value}, type=${type}, maxPrice=${maxPrice}, page=${page}, limit=${limit}, sort=${sort}`);
+    if (value) {
+      const regex = new RegExp(escapeRegex(value), 'i');
       query.$or = [{ city: regex }, { neighboorhood: regex },{desciption :regex},{title:regex}];
     }
 
@@ -91,15 +93,11 @@ exports.searchHouses = async (req, res) => {
       query.price = { $lte: Number(maxPrice) };
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-    const houses = await House.find(query)
-      .sort({ [sort]: 1 })
-      .skip(skip)
-      .limit(Number(limit));
+    const resultat = await paginate(House, query, req.query); 
 
-    
+    //console.log(`Search query: ${JSON.stringify(query)}`);
 
-    res.status(200).json(houses);
+    res.status(200).json(resultat);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
