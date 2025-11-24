@@ -7,7 +7,7 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
 // Créer une maison avec upload de plusieurs images
-router.post('/', upload.array('image'), houseController.createHouse);
+router.post('/', upload.array('images'), houseController.createHouse);
 
 
 

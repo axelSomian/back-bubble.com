@@ -10,5 +10,6 @@ const upload = multer({ dest: 'uploads/' });
 router.post('/', upload.array('image',1), ownerController.createOwner);
 // Get owner by ID
 router.get('/:id', ownerController.getOwnerById);
+router.get('/', ownerController.getAllOwners);
 
 module.exports = router;

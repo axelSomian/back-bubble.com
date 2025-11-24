@@ -6,20 +6,23 @@ const fs = require("fs");
 // Créer un logement avec upload d'images
 exports.createHouse = async (req, res) => {
     try {
-        const files = req.files;
+        const file = req.files;
+        
 
-        if (!files || files.length === 0) {
+        if (!file || file.length === 0) {
             return res.status(400).json({ error: 'No images uploaded' });
         }
 
         // Upload vers Cloudinary via le controller externe
         const imageUrls = await Promise.all(
-            files.map(async (file) => {
+            file.map(async (file) => {
                 const result = await cloudinaryController.uploadImage(file);
+                
                 // Sécurité : supprime le fichier local même si l’upload échoue
                 if (fs.existsSync(file.path)) {
                     fs.unlinkSync(file.path);
                 }
+              
                 return result.medium;
             })
         );
@@ -28,13 +31,16 @@ exports.createHouse = async (req, res) => {
             ...req.body,
             imageUrl: imageUrls
         });
+        console.log("Creating house with data:", house);
 
         // Parser equipments si c’est une string
         if (typeof req.body.equipments === 'string') {
             try {
                 house.equipments = JSON.parse(req.body.equipments);
             } catch {
+                console.log("Invalid format for equipments");
                 return res.status(400).json({ error: "Invalid format for equipments" });
+                
             }
         }
 

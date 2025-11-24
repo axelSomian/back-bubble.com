@@ -10,7 +10,7 @@ const houseSchema = new mongoose.Schema({
   imageUrl: [{ type: String, required: true }],
   city: { type: String, required: true },
   neighboorhood: { type: String, required: true },
-  geoSite: { type: String, required: true },
+  geoSite: { type: String, required: false },
   idOwner: { type: String, required: true },
   isLocated: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },

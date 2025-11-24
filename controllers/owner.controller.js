@@ -38,3 +38,10 @@ exports.getOwnerById = (req, res) => {
         .then(owners => res.status(200).json(owners))
         .catch(err => res.status(500).json({ error: err.message }));
 };
+
+
+exports.getAllOwners = (req, res) => {
+    ownerModel.find()
+        .then(owners => res.status(200).json(owners))
+        .catch(err => res.status(500).json({ error: err.message }));
+};
