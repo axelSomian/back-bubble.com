@@ -20,4 +20,7 @@ router.get('/search', houseController.searchHouses);
 // Obtenir une maison par ID
 router.get('/:id', houseController.getHouseById);
 
+// Update house
+router.put('/:id', upload.array('images'), houseController.updateHouse);
+
 module.exports = router;

@@ -7,9 +7,9 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
 // Create a new owner
-router.post('/', upload.array('image',1), ownerController.createOwner);
-// Get owner by ID
-router.get('/:id', ownerController.getOwnerById);
-router.get('/', ownerController.getAllOwners);
+router.get('/getOwnerByToken', ownerController.getOwnerByToken);
+router.get('/getOwnerHouses', ownerController.getOwnerHouses);  // Current user's houses
+router.get('/getAllOwner', ownerController.getAllOwner);
+// router.put('/houses/:id', upload.array('images'), ownerController.updateHouse);
 
 module.exports = router;
