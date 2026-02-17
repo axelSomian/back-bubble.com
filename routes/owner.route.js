@@ -10,6 +10,7 @@ const upload = multer({ dest: 'uploads/' });
 router.get('/getOwnerByToken', ownerController.getOwnerByToken);
 router.get('/getOwnerHouses', ownerController.getOwnerHouses);  // Current user's houses
 router.get('/getAllOwner', ownerController.getAllOwner);
+router.get('/:id', ownerController.getOwnerByID);
 // router.put('/houses/:id', upload.array('images'), ownerController.updateHouse);
 
 module.exports = router;

@@ -23,4 +23,7 @@ router.get('/:id', houseController.getHouseById);
 // Update house
 router.put('/:id', upload.array('images'), houseController.updateHouse);
 
+// Update house status
+router.patch('/:id/status', houseController.toggleHouseStatus);
+
 module.exports = router;

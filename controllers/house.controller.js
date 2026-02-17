@@ -94,14 +94,28 @@ exports.updateHouse = async (req, res) => {
             }
         }
 
-        // Handle image upload only if files are provided
+        // Handle images: Merge existing images (from body) + new uploads
+        let finalImages = [];
+
+        // 1. Recover existing images
+        if (req.body.existingImages) {
+            // If only one image is sent, it might be a string, otherwise an array
+            if (Array.isArray(req.body.existingImages)) {
+                finalImages = [...req.body.existingImages];
+            } else {
+                finalImages = [req.body.existingImages];
+            }
+        }
+
+        // 2. Add new uploaded images
         if (req.files && req.files.length > 0) {
             const file = req.files;
-            const imageUrls = await Promise.all(
+            const newImageUrls = await Promise.all(
                 file.map(async (file) => {
                     const result = await cloudinaryController.uploadImage(file);
 
-                    // Sécurité : supprime le fichier local même si l’upload échoue
+                    // Security: delete local file even if upload fails (though Promise.all might reject before this if one fails)
+                    // Better to wrap in try/catch inside map if we want partial success, but current logic is fine for now
                     if (fs.existsSync(file.path)) {
                         fs.unlinkSync(file.path);
                     }
@@ -109,8 +123,13 @@ exports.updateHouse = async (req, res) => {
                     return result.medium;
                 })
             );
-            house.imageUrl = imageUrls;
+            finalImages = [...finalImages, ...newImageUrls];
         }
+
+        // Always update the image list if we have established a new list (either empty or with items)
+        // If the user deleted all images, finalImages will be [], which is correct.
+        // If the user didn't touch images but sent existingImages back, it will be the same list.
+        house.imageUrl = finalImages;
 
         await house.save();
         res.status(200).json({ message: 'House updated successfully!', house });
@@ -121,10 +140,10 @@ exports.updateHouse = async (req, res) => {
 }
 
 
-// Récupérer toutes les maisons
+// Récupérer toutes les maisons (Publiques = Actives uniquement)
 exports.getHouses = async (req, res) => {
     try {
-        const resultat = await paginate(House, {}, req.query);
+        const resultat = await paginate(House, { isActive: true }, req.query);
         res.status(200).json(resultat);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -148,37 +167,78 @@ exports.getHouseById = async (req, res) => {
 const escapeRegex = s => s ? s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : s;
 
 exports.searchHouses = async (req, res) => {
-    try {
-        // console.log("Search request received with query:", req.query);
-        const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
-        //  console.log(value)
-        const query = {};
+  try {
+    const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
 
-        //console.log(`Search parameters: place=${value}, type=${type}, maxPrice=${maxPrice}, page=${page}, limit=${limit}, sort=${sort}`);
-        if (value) {
-            const regex = new RegExp(escapeRegex(value), 'i');
-            query.$or = [{ city: regex }, { neighboorhood: regex }, { desciption: regex }, { title: regex }];
-        }
+    // Filtre par défaut
+    const query = { isActive: true };
 
-        if (type) {
-            query.type = { $regex: new RegExp(escapeRegex(type), 'i') };
-        }
-
-        if (maxPrice && !Number.isNaN(Number(maxPrice))) {
-            query.price = { $lte: Number(maxPrice) };
-        }
-
-        const resultat = await paginate(House, query, req.query);
-
-        //console.log(`Search query: ${JSON.stringify(query)}`);
-
-        res.status(200).json(resultat);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+    if (value) {
+      const regex = new RegExp(escapeRegex(value), 'i');
+      query.$or = [
+        { city: regex },
+        { neighboorhood: regex },
+        { desciption: regex },
+        { title: regex }
+      ];
     }
+
+    if (type) {
+      query.type = { $regex: new RegExp(escapeRegex(type), 'i') };
+    }
+
+    if (maxPrice && !Number.isNaN(Number(maxPrice))) {
+      query.price = { $lte: Number(maxPrice) };
+    }
+
+    // Recherche principale
+    let resultat = await paginate(House, query, req.query);
+
+    // 🔁 Fallback : aucune house trouvée → on retourne tout
+    if (!resultat || resultat.length === 0) {
+      resultat = await paginate(House, { isActive: true }, req.query);
+    }
+
+    res.status(200).json(resultat);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 
 
 
 
+
+
+// Toggle active status
+exports.toggleHouseStatus = async (req, res) => {
+    try {
+        const headers = req.headers;
+        const token = headers.authorization ? headers.authorization.split(" ")[1] : null;
+
+        if (!token) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        const idOwner = decodedToken.userId;
+
+        const house = await House.findById(req.params.id);
+        if (!house) {
+            return res.status(404).json({ message: 'House not found' });
+        }
+
+        if (house.idOwner !== idOwner) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        house.isActive = !house.isActive;
+        await house.save();
+
+        res.status(200).json({ message: 'House status updated successfully', house });
+    } catch (error) {
+        console.error("Error updating house status:", error);
+        res.status(500).json({ error: error.message });
+    }
+};

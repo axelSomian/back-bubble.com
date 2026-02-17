@@ -32,6 +32,20 @@ exports.getOwnerByToken = async (req, res) => {
     }
 };
 
+exports.getOwnerByID = async (req,res)=>{
+    const { id } = req.params;
+    try {
+        const owner = await User.findOne({ _id: id, type: 'admin' });
+        if (!owner) {
+            return res.status(404).json({ message: "Owner not found" });
+        }
+        return res.status(200).json(owner);
+    } catch (err) {
+        return res.status(500).json({ message: err.message });
+    }
+
+}
+
 /**
  * Get all houses belonging to the logged-in owner.
  */
