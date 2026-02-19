@@ -8,18 +8,8 @@ const House = require('../models/house.model');
  * Prevents race conditions by using local scope for user IDs.
  */
 exports.getOwnerByToken = async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).json({ message: "Token not found" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.userId;
-
-        const owner = await User.findById(userId);
+        const owner = await User.findById(req.auth.userId);
 
         if (!owner) {
             return res.status(404).json({ message: "User not found" });
@@ -28,11 +18,11 @@ exports.getOwnerByToken = async (req, res) => {
         return res.status(200).json(owner);
 
     } catch (err) {
-        return res.status(401).json({ message: "Unauthorized or invalid token" });
+        return res.status(500).json({ message: err.message });
     }
 };
 
-exports.getOwnerByID = async (req,res)=>{
+exports.getOwnerByID = async (req, res) => {
     const { id } = req.params;
     try {
         const owner = await User.findOne({ _id: id, type: 'admin' });
@@ -50,27 +40,14 @@ exports.getOwnerByID = async (req,res)=>{
  * Get all houses belonging to the logged-in owner.
  */
 exports.getOwnerHouses = async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const ownerId = decoded.userId;
-
-        const houses = await House.find({ idOwner: ownerId });
+        const houses = await House.find({ idOwner: req.auth.userId });
 
         if (!houses || houses.length === 0) {
             return res.status(200).json({ message: "No houses found" });
         }
         return res.status(200).json(houses);
     } catch (err) {
-        if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
-            return res.status(401).json({ message: "Token expired or invalid" });
-        }
         console.log(err);
         return res.status(500).json({ message: "Error fetching houses" });
     }
@@ -91,34 +68,3 @@ exports.getAllOwner = async (req, res) => {
         return res.status(500).json({ message: "Error fetching owners" });
     }
 };
-
-/**
- * Get houses by a specific owner ID (Admin usage).
- */
-exports.getHousesByOwnerId = async (req, res) => {
-    const headers = req.headers;
-    const token = headers.authorization.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({ message: "Unauthorized" });
-    }
-    if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const ownerId = decoded.userId;
-    }
-
-    const ownerId = req.params.id;
-
-
-    try {
-        const houses = await House.find({ idOwner: ownerId });
-        if (!houses || houses.length === 0) {
-            return res.status(404).json({ message: "No houses found for this owner" });
-        }
-        return res.status(200).json(houses);
-    } catch (err) {
-        return res.status(500).json({ message: "Error fetching houses for owner" });
-    }
-};
-
-
-

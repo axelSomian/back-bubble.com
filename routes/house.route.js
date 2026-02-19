@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const houseController = require('../controllers/house.controller');
-const multer = require('multer');
+const auth = require('../middleware/auth.middleware');
+const upload = require('../middleware/multer-config');
 
-// Stockage temporaire dans le dossier uploads/
-const upload = multer({ dest: 'uploads/' });
-
-// Créer une maison avec upload de plusieurs images
-router.post('/', upload.array('images'), houseController.createHouse);
+// Créer une maison avec upload de plusieurs images (Protégé)
+router.post('/', auth, upload.array('images'), houseController.createHouse);
 
 
 
@@ -20,10 +18,10 @@ router.get('/search', houseController.searchHouses);
 // Obtenir une maison par ID
 router.get('/:id', houseController.getHouseById);
 
-// Update house
-router.put('/:id', upload.array('images'), houseController.updateHouse);
+// Update house (Protégé)
+router.put('/:id', auth, upload.array('images'), houseController.updateHouse);
 
-// Update house status
-router.patch('/:id/status', houseController.toggleHouseStatus);
+// Update house status (Protégé)
+router.patch('/:id/status', auth, houseController.toggleHouseStatus);
 
 module.exports = router;

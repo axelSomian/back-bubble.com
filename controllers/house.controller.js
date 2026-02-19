@@ -3,34 +3,35 @@ const cloudinaryController = require('./cloudinary.controller');
 const paginate = require('../helpers/paginate');
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
+const sanitize = require('mongo-sanitize');
 
 // Créer un logement avec upload d'images
 exports.createHouse = async (req, res) => {
+    req.body = sanitize(req.body);
+    const files = req.files;
+
     try {
-        const file = req.files;
-
-
-        if (!file || file.length === 0) {
+        if (!files || files.length === 0) {
             return res.status(400).json({ error: 'No images uploaded' });
+        }
+
+        // Validation basique des entrées
+        if (req.body.price < 0 || req.body.rooms < 0) {
+            return res.status(400).json({ error: "Le prix et le nombre de pièces ne peuvent pas être négatifs." });
         }
 
         // Upload vers Cloudinary via le controller externe
         const imageUrls = await Promise.all(
-            file.map(async (file) => {
+            files.map(async (file) => {
                 const result = await cloudinaryController.uploadImage(file);
-
-                // Sécurité : supprime le fichier local même si l’upload échoue
-                if (fs.existsSync(file.path)) {
-                    fs.unlinkSync(file.path);
-                }
-
                 return result.medium;
             })
         );
 
         const house = new House({
             ...req.body,
-            imageUrl: imageUrls
+            imageUrl: imageUrls,
+            idOwner: req.auth.userId // Assignation sécurisée de l'ID propriétaire
         });
         console.log("Creating house with data:", house);
 
@@ -41,31 +42,36 @@ exports.createHouse = async (req, res) => {
             } catch {
                 console.log("Invalid format for equipments");
                 return res.status(400).json({ error: "Invalid format for equipments" });
-
             }
         }
 
         await house.save();
-
         res.status(201).json({ message: 'House created successfully!', house });
     } catch (err) {
         console.error("Error creating house:", err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Une erreur est survenue lors de la création du logement." });
+    } finally {
+        try {
+            // Nettoyage de sécurité : s'assurer que TOUS les fichiers locaux sont supprimés
+            if (files && files.length > 0) {
+                files.forEach(file => {
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Erreur nettoyage fichiers temporaires (House Create):", e);
+        }
     }
 };
 
 
 exports.updateHouse = async (req, res) => {
+    req.body = sanitize(req.body);
     try {
-        const headers = req.headers;
-        const token = headers.authorization ? headers.authorization.split(" ")[1] : null;
+        const idOwner = req.auth.userId;
 
-        if (!token) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const idOwner = decodedToken.userId;
 
         const house = await House.findById(req.params.id);
         if (!house) {
@@ -135,13 +141,26 @@ exports.updateHouse = async (req, res) => {
         res.status(200).json({ message: 'House updated successfully!', house });
     } catch (error) {
         console.error("Error updating house:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Une erreur est survenue lors de la mise à jour." });
+    } finally {
+        try {
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => {
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Erreur nettoyage fichiers temporaires (House Update):", e);
+        }
     }
-}
+};
 
 
 // Récupérer toutes les maisons (Publiques = Actives uniquement)
 exports.getHouses = async (req, res) => {
+    req.query = sanitize(req.query);
     try {
         const resultat = await paginate(House, { isActive: true }, req.query);
         res.status(200).json(resultat);
@@ -167,42 +186,45 @@ exports.getHouseById = async (req, res) => {
 const escapeRegex = s => s ? s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : s;
 
 exports.searchHouses = async (req, res) => {
-  try {
-    const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
+    req.query = sanitize(req.query);
+    try {
+        const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
 
-    // Filtre par défaut
-    const query = { isActive: true };
+        // Filtre par défaut
+        const query = { isActive: true };
 
-    if (value) {
-      const regex = new RegExp(escapeRegex(value), 'i');
-      query.$or = [
-        { city: regex },
-        { neighboorhood: regex },
-        { desciption: regex },
-        { title: regex }
-      ];
+        if (value) {
+            const regex = new RegExp(escapeRegex(value), 'i');
+            query.$or = [
+                { city: regex },
+                { neighboorhood: regex },
+                { desciption: regex },
+                { title: regex }
+            ];
+        }
+
+        if (type) {
+            query.type = { $regex: new RegExp(escapeRegex(type), 'i') };
+        }
+
+        if (maxPrice && !Number.isNaN(Number(maxPrice))) {
+            query.price = { $lte: Number(maxPrice) };
+        }
+
+        // Recherche principale
+        let resultat = await paginate(House, query, req.query);
+
+        let isFallback = false;
+        // 🔁 Fallback : aucune house trouvée → on retourne tout
+        if (!resultat || resultat.data.length === 0) {
+            resultat = await paginate(House, { isActive: true }, req.query);
+            isFallback = true;
+        }
+
+        res.status(200).json({ ...resultat, isFallback });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-
-    if (type) {
-      query.type = { $regex: new RegExp(escapeRegex(type), 'i') };
-    }
-
-    if (maxPrice && !Number.isNaN(Number(maxPrice))) {
-      query.price = { $lte: Number(maxPrice) };
-    }
-
-    // Recherche principale
-    let resultat = await paginate(House, query, req.query);
-
-    // 🔁 Fallback : aucune house trouvée → on retourne tout
-    if (!resultat || resultat.length === 0) {
-      resultat = await paginate(House, { isActive: true }, req.query);
-    }
-
-    res.status(200).json(resultat);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 };
 
 
@@ -214,15 +236,8 @@ exports.searchHouses = async (req, res) => {
 // Toggle active status
 exports.toggleHouseStatus = async (req, res) => {
     try {
-        const headers = req.headers;
-        const token = headers.authorization ? headers.authorization.split(" ")[1] : null;
+        const idOwner = req.auth.userId;
 
-        if (!token) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-        const idOwner = decodedToken.userId;
 
         const house = await House.findById(req.params.id);
         if (!house) {
