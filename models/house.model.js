@@ -15,8 +15,16 @@ const houseSchema = new mongoose.Schema({
   isLocated: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   notation: { type: Number, default: 0 },
-  equipments: { type: [String], required:true } // Array of strings for equipments
+  equipments: { type: [String], required: true } // Array of strings for equipments
 }, { timestamps: true });
+
+// Indexation pour booster les performances de recherche
+houseSchema.index({ city: 1 });
+houseSchema.index({ neighboorhood: 1 });
+houseSchema.index({ price: 1 });
+houseSchema.index({ type: 1 });
+houseSchema.index({ idOwner: 1 });
+houseSchema.index({ isActive: 1 });
 
 const House = mongoose.model('House', houseSchema);
 module.exports = House;

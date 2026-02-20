@@ -1,15 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const ownerController = require('../controllers/owner.controller');
+const auth = require('../middleware/auth.middleware');
 const multer = require('multer');
 
 // Stockage temporaire dans le dossier uploads/
 const upload = multer({ dest: 'uploads/' });
 
-// Create a new owner
-router.post('/', upload.array('image',1), ownerController.createOwner);
-// Get owner by ID
-router.get('/:id', ownerController.getOwnerById);
-router.get('/', ownerController.getAllOwners);
+// Routes protégées
+router.get('/getOwnerByToken', auth, ownerController.getOwnerByToken);
+router.get('/getOwnerHouses', auth, ownerController.getOwnerHouses);  // Current user's houses
+router.get('/getAllOwner', ownerController.getAllOwner);
+router.get('/:id', ownerController.getOwnerByID);
+// router.put('/houses/:id', upload.array('images'), ownerController.updateHouse);
 
 module.exports = router;
