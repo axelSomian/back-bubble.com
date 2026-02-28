@@ -198,7 +198,7 @@ exports.searchHouses = async (req, res) => {
             query.$or = [
                 { city: regex },
                 { neighboorhood: regex },
-                { desciption: regex },
+                { description: regex },
                 { title: regex }
             ];
         }

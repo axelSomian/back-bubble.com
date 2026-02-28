@@ -49,7 +49,7 @@ app.disable('X-Powered-By');
 // CORS Configuration - Permissive for development (as requested)
 app.use(cors());
 app.get('/', (req, res) => {
-  res.send('API Bubble opérationnelle 🎉');
+  res.send('API Anka opérationnelle 🎉');
 });
 app.use('/api/houses', houseRoutes);
 app.use('/api/users', userRoutes); // Assurez-vous que le fichier user.route.js existe

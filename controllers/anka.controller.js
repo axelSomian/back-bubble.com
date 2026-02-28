@@ -1,105 +1,120 @@
 require('dotenv').config();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const House = require('../models/house.model');
+
 exports.AskAnka = async (req, res) => {
     const userMessage = req.body.message;
     if (!userMessage) {
         return res.status(400).json({ error: "Message requis" });
     }
-    try {
-        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-        const systemInstruction = `
-            Tu es Anka, un assistant immobilier de luxe prestigieux et chaleureux.
-            Ta mission est d'analyser la demande du client avec une grande attention et de lui répondre avec élégance.
-            
-            1. **Analyse** : Identifie la ville, le quartier (commune), le type de bien, le budget, et le nombre de pièces/chambres.
-            2. **Extraction** : Tu DOIS extraire ces données au format JSON strict.
-            3. **Message** : Tu dois rédiger un message ("Message") court, accueillant et très professionnel, qui reformule la demande du client sur un ton rassurant (ex: "J'ai sélectionné pour vous des villas d'exception à Cocody..."). Sois poli et engageant.
 
-            Format JSON attendu (Strictement ce format, sans markdown) :
-            {
-                "Message": "string",
-                "isValid": true,
-                "city": "string|null",
-                "neighboorhood": "string|null",
-                "rooms": "number|null",
-                "Type": "string|null",
-                "minPrice": "number|null",
-                "maxPrice": "number|null"
-            }
-        `;
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
-            systemInstruction
+    try {
+        const response = await fetch(`${process.env.ANKA_URL}/extraire`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ phrase: userMessage }),
         });
 
-        // 🔹 1. Obtenir les critères depuis Anka
-        const result = await model.generateContent(userMessage);
-        let responseText = result.response.text().trim();
+        if (!response.ok) {
+            throw new Error(`Erreur service externe: ${response.statusText}`);
+        }
 
-        // Nettoyage
-        responseText = responseText
-            .replace(/```json/gi, "")
-            .replace(/```/g, "")
-            .trim();
-        let criteria;
-        try {
-            criteria = JSON.parse(responseText);
-            if (criteria.isValid === false) {
-                return res.status(500).json({
-                    error: criteria.Message || "Je n'ai pas compris votre demande."
-                });
-            }
-            console.log("Critères extraits:", criteria);
-        } catch (error) {
-            return res.status(500).json({
-                error: "Erreur parsing JSON IA",
-                raw: responseText
+        const criteria = await response.json();
+
+        if (!criteria.isValid) {
+            return res.status(200).json({
+                message: criteria.Message || "Je n'ai pas pu identifier vos critères précisément. Pouvez-vous m'en dire plus ?",
+                results: []
             });
         }
-        // 🔹 2. Construire la requête MongoDB
-        const query = {};
-        message = criteria.Message; // Le beau message généré par l'IA
-        delete criteria.Message;
-        delete criteria.isValid;
 
-        if (criteria.city) {
-            query.city = new RegExp(criteria.city, 'i');
+        //  Construction de la requête MongoDB
+        const query = { isActive: true };
+        const responseMessage = criteria.Message;
+
+        // Filtres cumulatifs (Location, Type, etc.)
+        const filters = [];
+
+        if (criteria.city && typeof criteria.city === 'string') {
+            filters.push({
+                $or: [
+                    { city: new RegExp(criteria.city, 'i') },
+                    { neighboorhood: new RegExp(criteria.city, 'i') }
+                ]
+            });
         }
-        if (criteria.neighboorhood) {
-            // Recherche dans le quartier (ou la description si quartier non trouvé, optionnel)
-            query.neighboorhood = new RegExp(criteria.neighboorhood, 'i');
+        if (criteria.neighboorhood && typeof criteria.neighboorhood === 'string') {
+            filters.push({
+                $or: [
+                    { city: new RegExp(criteria.neighboorhood, 'i') },
+                    { neighboorhood: new RegExp(criteria.neighboorhood, 'i') }
+                ]
+            });
         }
-        if (criteria.Type) {
-            query.type = new RegExp(criteria.Type, 'i');
+
+        // Type de bien (Recherche dans type ET title pour plus de souplesse)
+        if (criteria.Type && typeof criteria.Type === 'string') {
+            filters.push({
+                $or: [
+                    { type: new RegExp(criteria.Type, 'i') },
+                    { title: new RegExp(criteria.Type, 'i') }
+                ]
+            });
         }
+
+        //  Recherche par Équipements / Amenities
+        if (criteria.amenities && Array.isArray(criteria.amenities) && criteria.amenities.length > 0) {
+            criteria.amenities.forEach(amenity => {
+                filters.push({
+                    $or: [
+                        { equipments: new RegExp(amenity, 'i') },
+                        { description: new RegExp(amenity, 'i') },
+                        { title: new RegExp(amenity, 'i') }
+                    ]
+                });
+            });
+        }
+
+        if (filters.length > 0) {
+            query.$and = filters;
+        }
+
         if (criteria.rooms) {
             query.rooms = { $gte: Number(criteria.rooms) };
         }
+
         if (criteria.minPrice || criteria.maxPrice) {
             query.price = {};
             if (criteria.minPrice) query.price.$gte = Number(criteria.minPrice);
             if (criteria.maxPrice) query.price.$lte = Number(criteria.maxPrice);
         }
-        console.log("Requête MongoDB construite:", query);
-        // 🔹 3. Exécuter la recherche MongoDB
-        const results = await House.find(query).limit(10);
-        // 🔹 4. Retourner la réponse finale 
-        if (results.length === 0) {
-            return res.status(200).json({
-                criteria,
-                results: [],
-                message: "Desolé, aucune maison ne correspond à vos critères. "
-            });
 
+        console.log("ANKA Query:", JSON.stringify(query, null, 2));
+        let results = await House.find(query).limit(10).sort({ createdAt: -1 });
+
+        let isFallback = false;
+        let finalMessage = criteria.Message;
+
+        //  Fallback Logic: Si aucun résultat, on cherche des résidences actives générales
+        if (results.length === 0) {
+            isFallback = true;
+            finalMessage = ` Analyse terminée. Aucun bien ne correspond exactement à ces critères ultra-spécifiques. Activation du protocole de secours Bubble... Affichage des opportunités premium actuellement disponibles.`;
+            results = await House.find({ isActive: true }).limit(10).sort({ createdAt: -1 });
         }
+
         return res.status(200).json({
             criteria,
             results,
-            message
+            isFallback,
+            message: finalMessage
         });
+
     } catch (error) {
-        console.error("Erreur AskAnka:", error);
-        return res.status(500).json({ error: "Erreur serveur" });
+        console.error("Erreur AskAnka Finale:", error);
+        return res.status(500).json({
+            error: "Désolé, je rencontre une difficulté technique.",
+            details: error.message
+        });
     }
 };

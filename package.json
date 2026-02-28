@@ -1,7 +1,7 @@
 {
-  "name": "back-bubble",
+  "name": "anka-backend",
   "version": "1.0.0",
-  "description": "Backend de l'application Bubble",
+  "description": "Backend de l'application Anka",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
