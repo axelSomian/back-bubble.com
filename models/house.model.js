@@ -19,12 +19,12 @@ const houseSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Indexation pour booster les performances de recherche
-houseSchema.index({ city: 1 });
-houseSchema.index({ neighboorhood: 1 });
 houseSchema.index({ price: 1 });
 houseSchema.index({ type: 1 });
 houseSchema.index({ idOwner: 1 });
 houseSchema.index({ isActive: 1 });
+// Index texte composé pour la recherche full-text (remplace les index simples city/neighboorhood)
+houseSchema.index({ title: 'text', description: 'text', city: 'text', neighboorhood: 'text' }, { name: 'house_text_search' });
 
 const House = mongoose.model('House', houseSchema);
 module.exports = House;

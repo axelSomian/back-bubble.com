@@ -4,23 +4,25 @@ async function paginate(model, query = {}, options = {}) {
   const limit = parseInt(options.limit) || 15;
   const skip = (page - 1) * limit;
 
-  console.log(`Paginating: page=${page}, limit=${limit}, skip=${skip}, query=${JSON.stringify(query)}`);
+  // Une seule requête MongoDB via $facet (data + count en parallèle)
+  const [result] = await model.aggregate([
+    { $match: query },
+    {
+      $facet: {
+        data: [{ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: limit }],
+        total: [{ $count: 'count' }]
+      }
+    }
+  ]);
 
-  // Récupération des données
-  const data = await model.find(query)
-    .skip(skip)
-    .limit(limit)
-    .sort({ createdAt: -1 }); // par défaut tri décroissant
-
-  // Compter le total
-  const total = await model.countDocuments(query);
+  const total = result?.total?.[0]?.count ?? 0;
 
   return {
     page,
     limit,
     total,
     totalPages: Math.ceil(total / limit),
-    data
+    data: result?.data ?? []
   };
 }
 

@@ -33,7 +33,7 @@ exports.createHouse = async (req, res) => {
             imageUrl: imageUrls,
             idOwner: req.auth.userId // Assignation sécurisée de l'ID propriétaire
         });
-        console.log("Creating house with data:", house);
+        if (process.env.NODE_ENV !== 'production') console.log("Creating house with data:", house);
 
         // Parser equipments si c’est une string
         if (typeof req.body.equipments === 'string') {
@@ -183,24 +183,17 @@ exports.getHouseById = async (req, res) => {
 };
 
 // Recherche par ville ou quartier, type et prix max
-const escapeRegex = s => s ? s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : s;
-
 exports.searchHouses = async (req, res) => {
     req.query = sanitize(req.query);
     try {
-        const { value, type, maxPrice, page = 1, limit = 20, sort = 'price' } = req.query;
+        const { value, type, maxPrice, page = 1, limit = 20 } = req.query;
 
-        // Filtre par défaut
+        // Filtre de base
         const query = { isActive: true };
 
+        // Recherche texte via l'index MongoDB $text (plus rapide que regex)
         if (value) {
-            const regex = new RegExp(escapeRegex(value), 'i');
-            query.$or = [
-                { city: regex },
-                { neighboorhood: regex },
-                { description: regex },
-                { title: regex }
-            ];
+            query.$text = { $search: value };
         }
 
         if (type) {
@@ -215,7 +208,7 @@ exports.searchHouses = async (req, res) => {
         let resultat = await paginate(House, query, req.query);
 
         let isFallback = false;
-        // 🔁 Fallback : aucune house trouvée → on retourne tout
+        // Fallback : aucune house trouvée → on retourne tout
         if (!resultat || resultat.data.length === 0) {
             resultat = await paginate(House, { isActive: true }, req.query);
             isFallback = true;
