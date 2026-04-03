@@ -188,7 +188,7 @@ exports.getHouseById = async (req, res) => {
 exports.searchHouses = async (req, res) => {
     req.query = sanitize(req.query);
     try {
-        const { value, type, maxPrice, page = 1, limit = 20 } = req.query;
+        const { value, type, maxPrice, verified, page = 1, limit = 20 } = req.query;
 
         // Filtre de base
         const query = { isActive: true };
@@ -204,6 +204,10 @@ exports.searchHouses = async (req, res) => {
 
         if (maxPrice && !Number.isNaN(Number(maxPrice))) {
             query.price = { $lte: Number(maxPrice) };
+        }
+
+        if (verified === 'true') {
+            query.isVerified = true;
         }
 
         // Recherche principale
