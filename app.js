@@ -5,6 +5,7 @@ const houseRoutes = require('./routes/house.route');
 const userRoutes = require('./routes/user.route'); // Assurez-vous que le fichier user.route.js existe
 const ownerRoutes = require('./routes/owner.route'); // Assurez-vous que le fichier owner.route.js existe
 const ankaRoutes = require('./routes/anka.route');
+const superadminRoutes = require('./routes/superadmin.route');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
@@ -55,6 +56,7 @@ app.use('/api/houses', houseRoutes);
 app.use('/api/users', userRoutes); // Assurez-vous que le fichier user.route.js existe
 app.use('/api/owners', ownerRoutes); // Assurez-vous que le fichier owner.route.js existe
 app.use('/api/anka', ankaRoutes);
+app.use('/api/superadmin', superadminRoutes);
 
 // Global Error Handler (Anti-Leak)
 app.use((err, req, res, next) => {

@@ -14,6 +14,7 @@ const houseSchema = new mongoose.Schema({
   idOwner: { type: String, required: true },
   isLocated: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
+  isVerified: { type: Boolean, default: false },
   notation: { type: Number, default: 0 },
   equipments: { type: [String], required: true } // Array of strings for equipments
 }, { timestamps: true });
