@@ -5,6 +5,8 @@ const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const sanitize = require('mongo-sanitize');
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Créer un logement avec upload d'images
 exports.createHouse = async (req, res) => {
     req.body = sanitize(req.body);
@@ -197,7 +199,7 @@ exports.searchHouses = async (req, res) => {
         }
 
         if (type) {
-            query.type = { $regex: new RegExp(escapeRegex(type), 'i') };
+            query.type = { $regex: escapeRegex(type), $options: 'i' };
         }
 
         if (maxPrice && !Number.isNaN(Number(maxPrice))) {
