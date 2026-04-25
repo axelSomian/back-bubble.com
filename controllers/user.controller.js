@@ -7,7 +7,6 @@ const fs = require('fs');
 
 exports.register = async (req, res) => {
   req.body = sanitize(req.body);
-  console.log(req.body);
   try {
     // Validation de la complexité du mot de passe
     const passwordRegex = /^(?=.*[0-9]).{8,}$/;
@@ -19,7 +18,8 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
 
     // Création du nouvel utilisateur avec des champs explicites (Anti-Mass Assignment)
-    const { firstName, lastName, email, phoneNumber, type } = req.body;
+    // Le type est toujours 'user' pour l'inscription publique
+    const { firstName, lastName, email, phoneNumber } = req.body;
 
     const user = new User({
       firstName,
@@ -27,18 +27,13 @@ exports.register = async (req, res) => {
       email,
       phoneNumber,
       password: hashedPassword,
-      type: type || 'user' // Utilise le type fourni ou 'user' par défaut
+      type: 'user'
     });
     const files = req.files;
-    let uploadResults;
-    if (!files || files.length === 0) {
-      return res.status(400).json({ error: 'No images uploaded' });
-    } else {
-      // Upload vers Cloudinary
-      uploadResults = await cloudinaryController.uploadImage(files[0])
+    if (files && files.length > 0) {
+      const uploadResults = await cloudinaryController.uploadImage(files[0]);
+      user.profileimageUrl = uploadResults.medium;
     }
-    const profileimageUrl = uploadResults.medium;
-    user.profileimageUrl = profileimageUrl;
 
 
     // Sauvegarde dans MongoDB
@@ -68,6 +63,48 @@ exports.register = async (req, res) => {
 }
 
 
+exports.toggleLike = async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const houseId = sanitize(req.params.houseId);
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+
+    const index = user.likedHouses.findIndex(id => id.toString() === houseId);
+    if (index === -1) {
+      user.likedHouses.push(houseId);
+    } else {
+      user.likedHouses.splice(index, 1);
+    }
+
+    await user.save();
+    res.status(200).json({ liked: index === -1, likedHouses: user.likedHouses.map(id => id.toString()) });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+};
+
+exports.getLikedHouses = async (req, res) => {
+  try {
+    const user = await User.findById(req.auth.userId).populate('likedHouses');
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    res.status(200).json(user.likedHouses);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+};
+
+exports.getLikedIds = async (req, res) => {
+  try {
+    const user = await User.findById(req.auth.userId, 'likedHouses');
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    res.status(200).json(user.likedHouses.map(id => id.toString()));
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+};
+
 exports.login = async (req, res) => {
   req.body = sanitize(req.body);
   try {
@@ -86,12 +123,12 @@ exports.login = async (req, res) => {
     // 🔐 Pour l'instant, on renvoie un token simulé
 
     const token = jwt.sign(
-      { userId: user._id, role: user.type },
-      process.env.JWT_SECRET, // Clé secrète pour signer le token
-      { expiresIn: '1h' } // Durée de validité du token
+      { userId: user._id, role: user.type, ownerId: user.ownerId || null },
+      process.env.JWT_SECRET,
+      { expiresIn: '4h' }
     );
 
-    res.status(200).json({ user: user.firstName + " " + user.lastName, token: token, type: user.type });
+    res.status(200).json({ user: user.firstName + " " + user.lastName, token: token, type: user.type, userId: user._id });
 
   } catch (err) {
     res.status(500).json({ error: "Une erreur est survenue lors de la connexion." });

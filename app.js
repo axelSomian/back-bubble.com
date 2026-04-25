@@ -5,6 +5,9 @@ const houseRoutes = require('./routes/house.route');
 const userRoutes = require('./routes/user.route'); // Assurez-vous que le fichier user.route.js existe
 const ownerRoutes = require('./routes/owner.route'); // Assurez-vous que le fichier owner.route.js existe
 const ankaRoutes = require('./routes/anka.route');
+const superadminRoutes = require('./routes/superadmin.route');
+const adminRoutes = require('./routes/admin.route');
+const gerantRoutes = require('./routes/gerant.route');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
@@ -25,13 +28,21 @@ app.use(compression());
 // Security Headers
 app.use(helmet());
 
-// Rate Limiting
+// Rate Limiting — global
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Augmenté pour le développement
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
   message: 'Trop de requêtes effectuées depuis cette IP, veuillez réessayer plus tard.'
 });
 app.use('/api/', limiter);
+
+// Rate Limiting — login strict (anti brute-force)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: 'Trop de tentatives de connexion, réessayez dans 15 minutes.'
+});
+app.use('/api/users/login', loginLimiter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -55,6 +66,9 @@ app.use('/api/houses', houseRoutes);
 app.use('/api/users', userRoutes); // Assurez-vous que le fichier user.route.js existe
 app.use('/api/owners', ownerRoutes); // Assurez-vous que le fichier owner.route.js existe
 app.use('/api/anka', ankaRoutes);
+app.use('/api/superadmin', superadminRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/gerant', gerantRoutes);
 
 // Global Error Handler (Anti-Leak)
 app.use((err, req, res, next) => {

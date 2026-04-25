@@ -14,8 +14,14 @@ const houseSchema = new mongoose.Schema({
   idOwner: { type: String, required: true },
   isLocated: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
+  isVerified: { type: Boolean, default: false },
   notation: { type: Number, default: 0 },
-  equipments: { type: [String], required: true } // Array of strings for equipments
+  equipments: { type: [String], required: true }, // Array of strings for equipments
+  // Workflow de publication
+  status: { type: String, enum: ['draft', 'pending', 'published', 'rejected'], default: 'published' },
+  rejectionNote: { type: String, default: null },
+  // Gérant assigné à cette résidence (optionnel)
+  assignedGerant: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
 // Indexation pour booster les performances de recherche

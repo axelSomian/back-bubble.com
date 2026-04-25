@@ -30,10 +30,24 @@ exports.createHouse = async (req, res) => {
             })
         );
 
+        // Les gérants créent en statut "pending" (validation requise par le supergerant/admin)
+        // Les admins et superadmins publient directement
+        const role = req.auth.role;
+        const isGerant = role === 'gerant';
+        const houseOwnerId = isGerant ? req.auth.ownerId : req.auth.userId;
+
+        // Pour admin/supergerant : assignedGerant peut être passé dans le body (picker)
+        // Pour gérant : forcé à lui-même
+        const gerantContact = isGerant
+          ? req.auth.userId
+          : (req.body.assignedGerant || null);
+
         const house = new House({
             ...req.body,
             imageUrl: imageUrls,
-            idOwner: req.auth.userId // Assignation sécurisée de l'ID propriétaire
+            idOwner: houseOwnerId,
+            status: isGerant ? 'pending' : 'published',
+            assignedGerant: gerantContact,
         });
         if (process.env.NODE_ENV !== 'production') console.log("Creating house with data:", house);
 
@@ -160,11 +174,12 @@ exports.updateHouse = async (req, res) => {
 };
 
 
-// Récupérer toutes les maisons (Publiques = Actives uniquement)
+// Récupérer toutes les maisons (Publiques = Actives + Publiées ou sans statut pour les anciennes)
 exports.getHouses = async (req, res) => {
     req.query = sanitize(req.query);
     try {
-        const resultat = await paginate(House, { isActive: true }, req.query);
+        const filter = { isActive: true, $or: [{ status: 'published' }, { status: { $exists: false } }, { status: null }] };
+        const resultat = await paginate(House, filter, req.query);
         res.status(200).json(resultat);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -188,10 +203,10 @@ exports.getHouseById = async (req, res) => {
 exports.searchHouses = async (req, res) => {
     req.query = sanitize(req.query);
     try {
-        const { value, type, maxPrice, page = 1, limit = 20 } = req.query;
+        const { value, type, maxPrice, verified, page = 1, limit = 20 } = req.query;
 
-        // Filtre de base
-        const query = { isActive: true };
+        // Filtre de base (publiées ou sans statut pour rétrocompatibilité)
+        const query = { isActive: true, $or: [{ status: 'published' }, { status: { $exists: false } }, { status: null }] };
 
         // Recherche texte via l'index MongoDB $text (plus rapide que regex)
         if (value) {
@@ -206,13 +221,18 @@ exports.searchHouses = async (req, res) => {
             query.price = { $lte: Number(maxPrice) };
         }
 
+        if (verified === 'true') {
+            query.isVerified = true;
+        }
+
         // Recherche principale
         let resultat = await paginate(House, query, req.query);
 
         let isFallback = false;
         // Fallback : aucune house trouvée → on retourne tout
         if (!resultat || resultat.data.length === 0) {
-            resultat = await paginate(House, { isActive: true }, req.query);
+            const fallbackFilter = { isActive: true, $or: [{ status: 'published' }, { status: { $exists: false } }, { status: null }] };
+            resultat = await paginate(House, fallbackFilter, req.query);
             isFallback = true;
         }
 
