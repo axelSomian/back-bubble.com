@@ -1,13 +1,14 @@
 const User = require('../models/user.model');
 const House = require('../models/house.model');
 const sanitize = require('mongo-sanitize');
+const bcrypt = require('bcrypt');
 
 // ─── Stats globales ───────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
     try {
         const [totalUsers, totalOwners, totalHouses, verifiedHouses, activeHouses] = await Promise.all([
             User.countDocuments({ type: 'user' }),
-            User.countDocuments({ type: 'owner' }),
+            User.countDocuments({ type: 'admin' }),
             House.countDocuments(),
             House.countDocuments({ isVerified: true }),
             House.countDocuments({ isActive: true }),
@@ -15,6 +16,38 @@ exports.getStats = async (req, res) => {
 
         res.status(200).json({ totalUsers, totalOwners, totalHouses, verifiedHouses, activeHouses });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// ─── Créer un compte privilégié (admin / owner / superadmin) ─────────────────
+exports.createPrivilegedUser = async (req, res) => {
+    try {
+        const { firstName, lastName, email, phoneNumber, password, role } = sanitize(req.body);
+
+        const allowedRoles = ['admin', 'superadmin'];
+        if (!allowedRoles.includes(role)) {
+            return res.status(400).json({ error: 'Rôle invalide. Valeurs acceptées : admin, superadmin.' });
+        }
+
+        const passwordRegex = /^(?=.*[0-9]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères et un chiffre.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const { companyName } = sanitize(req.body);
+        const user = new User({ firstName, lastName, email, phoneNumber, password: hashedPassword, type: role, companyName: companyName || null });
+        await user.save();
+
+        const userObj = user.toObject();
+        delete userObj.password;
+        res.status(201).json({ message: 'Compte créé avec succès.', user: userObj });
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ error: 'Cet email est déjà utilisé.' });
+        }
         res.status(500).json({ error: err.message });
     }
 };
@@ -54,7 +87,7 @@ exports.getUsers = async (req, res) => {
 exports.updateUserRole = async (req, res) => {
     try {
         const { role } = sanitize(req.body);
-        const allowed = ['user', 'admin', 'owner', 'superadmin'];
+        const allowed = ['user', 'admin', 'superadmin'];
 
         if (!allowed.includes(role)) {
             return res.status(400).json({ error: 'Rôle invalide.' });

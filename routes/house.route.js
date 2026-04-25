@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const houseController = require('../controllers/house.controller');
 const auth = require('../middleware/auth.middleware');
+const role = require('../middleware/role.middleware');
 const upload = require('../middleware/multer-config');
 
-// Créer une maison avec upload de plusieurs images (Protégé)
-router.post('/', auth, upload.array('images'), houseController.createHouse);
+// Créer une maison — réservé aux admins et supergerants
+router.post('/', auth, role('admin', 'supergerant'), upload.array('images'), houseController.createHouse);
 
 
 

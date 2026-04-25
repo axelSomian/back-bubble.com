@@ -11,9 +11,10 @@ router.use(auth, checkRole('superadmin'));
 router.get('/stats', ctrl.getStats);
 
 // Gestion utilisateurs
-router.get('/users',          ctrl.getUsers);
-router.patch('/users/:id/role', ctrl.updateUserRole);
-router.delete('/users/:id',   ctrl.deleteUser);
+router.post('/users',             ctrl.createPrivilegedUser);
+router.get('/users',              ctrl.getUsers);
+router.patch('/users/:id/role',   ctrl.updateUserRole);
+router.delete('/users/:id',       ctrl.deleteUser);
 
 // Gestion biens
 router.get('/houses',                    ctrl.getHouses);

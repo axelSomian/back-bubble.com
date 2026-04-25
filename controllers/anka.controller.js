@@ -31,7 +31,6 @@ exports.AskAnka = async (req, res) => {
 
         //  Construction de la requête MongoDB
         const query = { isActive: true };
-        const responseMessage = criteria.Message;
 
         // Filtres cumulatifs (Location, Type, etc.)
         const filters = [];
@@ -96,11 +95,48 @@ exports.AskAnka = async (req, res) => {
         let isFallback = false;
         let finalMessage = criteria.Message;
 
-        //  Fallback Logic: Si aucun résultat, on cherche des résidences actives générales
         if (results.length === 0) {
             isFallback = true;
-            finalMessage = ` Analyse terminée. Aucun bien ne correspond exactement à ces critères ultra-spécifiques. Activation du protocole de secours Bubble... Affichage des opportunités premium actuellement disponibles.`;
-            results = await House.find({ isActive: true }).limit(10).sort({ createdAt: -1 });
+
+            const hasLocation = !!(criteria.city || criteria.neighboorhood);
+            const hasType = !!(criteria.Type);
+
+            // Fallback 1 : même lieu, sans le type
+            if (hasLocation && hasType) {
+                const locationFilters = [];
+                if (criteria.city) locationFilters.push({ $or: [{ city: new RegExp(criteria.city, 'i') }, { neighboorhood: new RegExp(criteria.city, 'i') }] });
+                if (criteria.neighboorhood) locationFilters.push({ $or: [{ city: new RegExp(criteria.neighboorhood, 'i') }, { neighboorhood: new RegExp(criteria.neighboorhood, 'i') }] });
+
+                const locationQuery = { isActive: true, $and: locationFilters };
+                results = await House.find(locationQuery).limit(10).sort({ createdAt: -1 });
+
+                if (results.length > 0) {
+                    const lieu = criteria.city || criteria.neighboorhood;
+                    finalMessage = `Aucun ${criteria.Type} disponible à ${lieu} pour l'instant. Voici les biens disponibles dans cette zone.`;
+                }
+            }
+
+            // Fallback 2 : même type, sans le lieu
+            if (results.length === 0 && hasType) {
+                const typeQuery = {
+                    isActive: true,
+                    $or: [
+                        { type: new RegExp(criteria.Type, 'i') },
+                        { title: new RegExp(criteria.Type, 'i') }
+                    ]
+                };
+                results = await House.find(typeQuery).limit(10).sort({ createdAt: -1 });
+
+                if (results.length > 0) {
+                    finalMessage = `Aucun ${criteria.Type} trouvé dans cette zone. Voici les ${criteria.Type}s disponibles ailleurs sur Bubble.`;
+                }
+            }
+
+            // Fallback 3 : général
+            if (results.length === 0) {
+                results = await House.find({ isActive: true }).limit(10).sort({ createdAt: -1 });
+                finalMessage = `Aucun bien ne correspond exactement à vos critères. Voici les opportunités actuellement disponibles sur Bubble.`;
+            }
         }
 
         return res.status(200).json({

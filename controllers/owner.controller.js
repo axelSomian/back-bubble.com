@@ -25,7 +25,8 @@ exports.getOwnerByToken = async (req, res) => {
 exports.getOwnerByID = async (req, res) => {
     const { id } = req.params;
     try {
-        const owner = await User.findOne({ _id: id, type: 'admin' });
+        // Accepte admin, gerant et supergerant (pour l'affichage du contact sur la fiche)
+        const owner = await User.findOne({ _id: id, type: { $in: ['admin', 'gerant', 'supergerant'] } });
         if (!owner) {
             return res.status(404).json({ message: "Owner not found" });
         }
@@ -33,7 +34,6 @@ exports.getOwnerByID = async (req, res) => {
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
-
 }
 
 /**
